@@ -129,7 +129,7 @@ func New(accessToken string, opts ...Option) (*Client, error) {
 		token:      accessToken,
 		baseURL:    DefaultBaseURL,
 		httpClient: &http.Client{Timeout: 60 * time.Second},
-		userAgent:  "mercadopago-sdk-go/1.1.0",
+		userAgent:  "mercadopago-sdk-go/1.1.1",
 		headers:    http.Header{},
 		retry:      DefaultRetryPolicy(),
 	}

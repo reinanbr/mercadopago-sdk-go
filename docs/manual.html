@@ -184,7 +184,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--borde
 <div class="layout">
 <nav class="toc" id="toc" aria-label="Sumário">
   <div class="brand">mercado<span>pago</span>pix</div>
-  <div class="sub">Manual de uso avançado · v1.1.0</div>
+  <div class="sub">Manual de uso avançado · v1.1.1</div>
   <ol>
     <li><a href="#visao">Visão geral</a></li>
     <li><a href="#cliente">Configurando o cliente</a></li>
@@ -211,7 +211,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--borde
   <h1>Manual avançado do mercadopagopix</h1>
   <p>Biblioteca Go, sem dependências, para criar e acompanhar pagamentos PIX pela API do Mercado Pago. Este manual vai além do README: configuração fina, idempotência, marketplace, paginação, resiliência, webhooks em produção e o comportamento real do sandbox.</p>
   <div class="badges">
-    <span class="badge">v1.1.0</span>
+    <span class="badge">v1.1.1</span> <span class="badge">MIT</span>
     <span class="badge">Go 1.23+</span>
     <span class="badge">Só biblioteca padrão</span>
     <span class="badge">35 testes unitários · 87,5% de cobertura</span>
@@ -284,7 +284,7 @@ acc.IsTestUser()         // a conta é um usuário de teste do MP?</code></pre><
     <tr><td><code>WithPlatformID(id)</code></td><td>—</td><td>Envia <code>X-Platform-Id</code> (plataforma de e-commerce).</td></tr>
     <tr><td><code>WithCorporationID(id)</code></td><td>—</td><td>Envia <code>X-Corporation-Id</code> (agrupa contas de uma corporação).</td></tr>
     <tr><td><code>WithHeader(k, v)</code></td><td>—</td><td>Qualquer cabeçalho fixo em todas as chamadas.</td></tr>
-    <tr><td><code>WithUserAgent(ua)</code></td><td><code>mercadopago-sdk-go/1.1.0</code></td><td>Identifica sua aplicação nos logs do MP.</td></tr>
+    <tr><td><code>WithUserAgent(ua)</code></td><td><code>mercadopago-sdk-go/1.1.1</code></td><td>Identifica sua aplicação nos logs do MP.</td></tr>
     <tr><td><code>WithBaseURL(u)</code></td><td><code>https://api.mercadopago.com</code></td><td>Aponte para um <code>httptest.Server</code> nos testes.</td></tr>
   </table></div>
   <div class="code"><span class="lang">go</span><pre><code class="go">transport := otelhttp.NewTransport(http.DefaultTransport) // exemplo com tracing

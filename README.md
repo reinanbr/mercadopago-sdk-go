@@ -1,5 +1,9 @@
 # mercadopago-sdk-go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/reinanbr/mercadopago-sdk-go.svg)](https://pkg.go.dev/github.com/reinanbr/mercadopago-sdk-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/reinanbr/mercadopago-sdk-go)](https://goreportcard.com/report/github.com/reinanbr/mercadopago-sdk-go)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Cliente Go **sem dependências** para criar e acompanhar pagamentos **PIX** via API do Mercado Pago.
 
 Reescrita em Go da biblioteca Python [mercadopagovp](https://github.com/reinanbr/mercadopagovp), com melhorias.
@@ -136,3 +140,7 @@ O gerador de relatórios (`cmd/testreport`) mascara os tokens na saída.
 - A API **não** valida o tipo de documento do pagador nem limita a expiração a 30 dias no sandbox.
 - `notification_url` com `localhost` é recusada (400, causa 4020).
 - A mesma `X-Idempotency-Key` devolve o mesmo pagamento, sem duplicar a cobrança.
+
+## Licença
+
+[MIT](LICENSE)

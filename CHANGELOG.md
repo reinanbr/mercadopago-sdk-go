@@ -3,6 +3,16 @@
 Todas as mudanças relevantes deste projeto. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.1.1] - 2026-10-23
+
+### Adicionado
+- Licença MIT.
+- Badges do pkg.go.dev, Go Report Card e licença no README.
+
+### Alterado
+- Repositório público; módulo disponível via `go get github.com/reinanbr/mercadopago-sdk-go@latest`.
+- User-Agent `mercadopago-sdk-go/1.1.1`.
+
 ## [1.1.0] - 2026-10-23
 
 Primeira versão publicada. Melhorias inspiradas na engenharia reversa do
@@ -44,5 +54,6 @@ Reescrita em Go da biblioteca Python [mercadopagovp](https://github.com/reinanbr
 - Idempotência automática, retry com backoff e `context.Context` em todas as chamadas.
 - Validação de assinatura de webhooks e `WebhookHandler`.
 
+[1.1.1]: https://github.com/reinanbr/mercadopago-sdk-go/releases/tag/v1.1.1
 [1.1.0]: https://github.com/reinanbr/mercadopago-sdk-go/releases/tag/v1.1.0
 [1.0.0]: https://github.com/reinanbr/mercadopago-sdk-go/blob/v1.1.0/CHANGELOG.md#100---2026-10-23
