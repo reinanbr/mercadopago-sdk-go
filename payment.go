@@ -33,11 +33,57 @@ func (s Status) IsFinal() bool {
 }
 
 // Payer identifies who pays. Email is required by Mercado Pago for PIX.
+// Name, document, phone and address are optional but raise the approval
+// rate, since Mercado Pago uses them in its fraud analysis.
 type Payer struct {
 	Email          string          `json:"email,omitempty"`
 	FirstName      string          `json:"first_name,omitempty"`
 	LastName       string          `json:"last_name,omitempty"`
-	Identification *Identification `json:"identification,omitempty"`
+	Identification *Identification `json:"identification,omitempty"` // see CPF and CNPJ
+
+	// Phone and Address are sent in additional_info.payer.
+	Phone   *Phone   `json:"-"`
+	Address *Address `json:"-"`
+}
+
+// Phone is a Brazilian phone number, e.g. {AreaCode: "11", Number: "987654321"}.
+type Phone struct {
+	AreaCode string `json:"area_code,omitempty"`
+	Number   string `json:"number,omitempty"`
+}
+
+// Address is a postal address of the payer or of a shipment.
+type Address struct {
+	ZipCode      string `json:"zip_code,omitempty"`
+	StreetName   string `json:"street_name,omitempty"`
+	StreetNumber string `json:"street_number,omitempty"`
+	Neighborhood string `json:"neighborhood,omitempty"`
+	City         string `json:"city_name,omitempty"`
+	State        string `json:"state_name,omitempty"` // e.g. "SP"
+	Complement   string `json:"apartment,omitempty"`
+}
+
+// Item is a line of the order, sent in additional_info.items.
+type Item struct {
+	ID          string `json:"id,omitempty"` // your SKU
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	PictureURL  string `json:"picture_url,omitempty"`
+	CategoryID  string `json:"category_id,omitempty"` // e.g. "electronics"
+	Quantity    int    `json:"quantity"`
+	UnitPrice   Amount `json:"unit_price"`
+}
+
+// Total returns UnitPrice × Quantity.
+func (it Item) Total() Amount { return it.UnitPrice * Amount(it.Quantity) }
+
+// ItemsTotal returns the sum of the items' totals.
+func ItemsTotal(items []Item) Amount {
+	var t Amount
+	for _, it := range items {
+		t += it.Total()
+	}
+	return t
 }
 
 // Identification is a payer document, e.g. {Type: "CPF", Number: "12345678909"}.
@@ -57,15 +103,23 @@ type Payment struct {
 	CurrencyID        string
 	Amount            Amount
 	AmountRefunded    Amount
+	// NetReceivedAmount is what the seller receives after Mercado Pago's
+	// fees; TotalPaidAmount is what the payer paid. Both are set once paid.
+	NetReceivedAmount Amount
+	TotalPaidAmount   Amount
 	NotificationURL   string
 	LiveMode          bool
 	ExecutionID       string
 	Metadata          map[string]any
+	// Payer as recorded by Mercado Pago; PayerID is its Mercado Pago ID.
+	Payer   Payer
+	PayerID string
 
 	DateCreated      time.Time
 	DateApproved     time.Time
 	DateLastUpdated  time.Time
 	DateOfExpiration time.Time
+	MoneyReleaseDate time.Time
 
 	// QRCode is the PIX "copia e cola" payload.
 	QRCode string
@@ -95,6 +149,17 @@ type paymentWire struct {
 	DateApproved      mpTime         `json:"date_approved"`
 	DateLastUpdated   mpTime         `json:"date_last_updated"`
 	DateOfExpiration  mpTime         `json:"date_of_expiration"`
+	MoneyReleaseDate  mpTime         `json:"money_release_date"`
+
+	Payer struct {
+		Payer
+		ID flexString `json:"id"`
+	} `json:"payer"`
+
+	TransactionDetails struct {
+		NetReceivedAmount Amount `json:"net_received_amount"`
+		TotalPaidAmount   Amount `json:"total_paid_amount"`
+	} `json:"transaction_details"`
 
 	PointOfInteraction struct {
 		TransactionData struct {
@@ -129,14 +194,19 @@ func (p *Payment) UnmarshalJSON(b []byte) error {
 		CurrencyID:        w.CurrencyID,
 		Amount:            w.Amount,
 		AmountRefunded:    w.AmountRefunded,
+		NetReceivedAmount: w.TransactionDetails.NetReceivedAmount,
+		TotalPaidAmount:   w.TransactionDetails.TotalPaidAmount,
 		NotificationURL:   w.NotificationURL,
 		LiveMode:          w.LiveMode,
 		ExecutionID:       string(w.ChargesExecutionInfo.InternalExecution.ExecutionID),
 		Metadata:          w.Metadata,
+		Payer:             w.Payer.Payer,
+		PayerID:           string(w.Payer.ID),
 		DateCreated:       time.Time(w.DateCreated),
 		DateApproved:      time.Time(w.DateApproved),
 		DateLastUpdated:   time.Time(w.DateLastUpdated),
 		DateOfExpiration:  time.Time(w.DateOfExpiration),
+		MoneyReleaseDate:  time.Time(w.MoneyReleaseDate),
 		QRCode:            td.QRCode,
 		QRCodeBase64:      td.QRCodeBase64,
 		TicketURL:         td.TicketURL,
@@ -145,8 +215,40 @@ func (p *Payment) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// IsPaid reports whether the payment was approved.
+// IsPaid reports whether the payment was approved. A paid payment that is
+// later refunded or charged back changes status, so it stops being paid.
 func (p *Payment) IsPaid() bool { return p.Status == StatusApproved }
+
+// IsPayable reports whether the PIX can still be paid: pending, not
+// expired and with a QR code. Show it again instead of creating a new one.
+func (p *Payment) IsPayable() bool {
+	return p.Status == StatusPending && !p.IsExpired() && p.QRCode != ""
+}
+
+// RefundableAmount returns how much of an approved payment can still be
+// refunded (0 if it is not approved).
+func (p *Payment) RefundableAmount() Amount {
+	if p.Status != StatusApproved {
+		return 0
+	}
+	return max(p.Amount-p.AmountRefunded, 0)
+}
+
+// CheckOrder verifies that the payment belongs to the order with the given
+// external reference and total, in BRL. Call it before releasing an order:
+// it rejects a payment created for another order or with a tampered
+// amount. The error wraps ErrOrderMismatch.
+func (p *Payment) CheckOrder(externalReference string, total Amount) error {
+	switch {
+	case p.ExternalReference != externalReference:
+		return fmt.Errorf("%w: payment %d has external reference %q, want %q", ErrOrderMismatch, p.ID, p.ExternalReference, externalReference)
+	case p.Amount != total:
+		return fmt.Errorf("%w: payment %d is %s, order total is %s", ErrOrderMismatch, p.ID, p.Amount, total)
+	case p.CurrencyID != "" && p.CurrencyID != "BRL":
+		return fmt.Errorf("%w: payment %d is in %s", ErrOrderMismatch, p.ID, p.CurrencyID)
+	}
+	return nil
+}
 
 // IsExpired reports whether the payment is still pending past its expiration.
 func (p *Payment) IsExpired() bool {

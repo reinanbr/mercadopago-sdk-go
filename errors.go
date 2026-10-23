@@ -19,6 +19,9 @@ var (
 	ErrUnauthorized = errors.New("mercadopagopix: unauthorized")
 	// ErrExpired is returned by WaitForPayment when the PIX expired unpaid.
 	ErrExpired = errors.New("mercadopagopix: payment expired")
+	// ErrOrderMismatch is returned by Payment.CheckOrder when a payment does
+	// not match the order it is supposed to pay.
+	ErrOrderMismatch = errors.New("mercadopagopix: payment does not match order")
 	// ErrInvalidSignature is returned when a webhook signature does not match.
 	ErrInvalidSignature = errors.New("mercadopagopix: invalid webhook signature")
 )

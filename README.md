@@ -58,7 +58,103 @@ acc, err := client.Me(ctx)                              // conta dona do token (
 client.TestMode()                                       // true para tokens TEST-
 ```
 
-### Webhooks
+## E-commerce
+
+### Checkout: itens, documento e reaproveitamento do PIX
+
+```go
+items := []mp.Item{
+    {ID: "SKU-1", Title: "Camiseta", Quantity: 2, UnitPrice: mp.Reais(49.90)},
+    {ID: "SKU-2", Title: "Caneca", Quantity: 1, UnitPrice: mp.Reais(30)},
+}
+p, created, err := client.GetOrCreatePix(ctx, mp.CreatePixRequest{
+    Items:             items, // Amount vazio = soma dos itens (R$ 129,80)
+    Description:       "Pedido #42",
+    Payer: mp.Payer{
+        Email:          "cliente@example.com",
+        FirstName:      "Ana",
+        Identification: mp.CPF("529.982.247-25"), // dígitos verificados antes de chamar a API
+        Phone:          &mp.Phone{AreaCode: "11", Number: "987654321"},
+    },
+    Shipment:          &mp.Address{ZipCode: "01310-100", City: "São Paulo", State: "SP"},
+    ExternalReference: "pedido-42",
+    IdempotencyKey:    "pedido-42-1",
+    NotificationURL:   "https://seu-dominio.com/webhook",
+    ExpiresIn:         30 * time.Minute,
+})
+```
+
+`GetOrCreatePix` devolve o PIX ainda pagável do pedido (mesmo valor, pendente, não expirado) ou cria um novo, então o cliente que recarrega a página vê o mesmo QR code. Itens, telefone e endereço vão em `additional_info` e melhoram a aprovação na análise antifraude.
+
+Outros auxiliares:
+
+```go
+mp.ParseAmount("1.234,56")             // valor digitado: R$ 1.234,56 (sem float)
+mp.ValidCPF("529.982.247-25"); mp.ValidCNPJ("11.222.333/0001-81")
+client.FindByExternalReference(ctx, "pedido-42", (*mp.Payment).IsPaid) // pagamento aprovado do pedido
+p.IsPayable()          // pendente, não expirado e com QR code
+p.RefundableAmount()   // quanto ainda dá para estornar
+p.NetReceivedAmount    // valor líquido após a tarifa
+```
+
+### Webhook de produção
+
+Sempre confira o pedido antes de liberá-lo: `CheckOrder` recusa um pagamento de outro pedido ou com valor diferente (alguém pode gerar um PIX de R$ 1 com o `external_reference` do seu pedido).
+
+```go
+webhook := client.NewWebhookHandler(mp.WebhookConfig{
+    Validator: &mp.WebhookValidator{Secret: secret, Tolerance: 10 * time.Minute},
+    Async:     true, // responde 200 na hora (limite de 22 s do Mercado Pago)
+    Handle: func(ctx context.Context, p *mp.Payment) error {
+        order, err := db.Order(ctx, p.ExternalReference)
+        if err != nil { return err }
+        if err := p.CheckOrder(order.ID, order.Total); err != nil { return err } // ErrOrderMismatch
+        if p.IsPaid() { return db.MarkPaid(ctx, order.ID, p.ID) } // idempotente: pode chegar repetido
+        return nil
+    },
+})
+mux.Handle("POST /webhook", webhook)
+// no desligamento:
+srv.Shutdown(ctx)
+webhook.Wait(ctx) // termina as notificações já aceitas
+```
+
+No modo assíncrono, `MaxConcurrent` (padrão 32) limita o processamento simultâneo; acima disso responde 503 e o Mercado Pago reenvia depois. Veja [`examples/webhook`](examples/webhook/main.go).
+
+### Logs
+
+```go
+client, _ := mp.NewFromEnv(mp.WithLogger(slog.Default()))
+// cada tentativa HTTP: método, caminho, status, duração e X-Request-Id (nunca o token)
+```
+
+### Testes da sua loja com `mptest`
+
+O sandbox não deixa aprovar um PIX. O pacote `mptest` é um Mercado Pago falso em memória que deixa: aprova, expira, estorna e envia o webhook assinado para a `notification_url`.
+
+```go
+import "github.com/reinanbr/mercadopago-sdk-go/mptest"
+
+srv := mptest.NewServer()
+defer srv.Close()
+client := srv.Client()                 // aponta para o servidor falso
+shop := httptest.NewServer(client.NewWebhookHandler(mp.WebhookConfig{
+    Validator: srv.Validator(),        // assinatura com srv.WebhookSecret
+    Handle:    minhaLoja.Handle,
+}))
+
+p, _ := client.CreatePix(ctx, mp.CreatePixRequest{..., NotificationURL: shop.URL})
+srv.Approve(p.ID)      // pago + webhook (erro se o seu handler não responder 2xx)
+srv.Expire(id)         // cancelled/expired, como o Mercado Pago faz
+srv.ChargeBack(id)
+srv.FailNext(503, 500) // injeta falhas para testar retry
+srv.Now = func() time.Time { ... } // relógio controlado
+srv.Requests()         // chamadas recebidas (com X-Idempotency-Key)
+```
+
+Suporta criar, consultar, cancelar, estornos, busca e idempotência. Veja [`mptest/mptest_test.go`](mptest/mptest_test.go) para um fluxo de checkout completo.
+
+### Webhooks (simples)
 
 ```go
 http.Handle("/webhook", client.WebhookHandler(os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
@@ -90,7 +186,7 @@ Para códigos comuns e pouco óbvios (4390, 4020, 13253, 2000), a mensagem de er
 ```go
 mercadopagopix.New(token,
     mercadopagopix.WithHTTPClient(&http.Client{Timeout: 10 * time.Second}),
-    mercadopagopix.WithRetries(3, time.Second), // padrão: 2 tentativas extras, 500ms com backoff
+    mercadopagopix.WithRetries(3, time.Second), // padrão: 3 tentativas extras, 500ms com backoff
     mercadopagopix.WithUserAgent("minha-loja/1.0"),
 )
 ```

@@ -3,6 +3,27 @@
 Todas as mudanças relevantes deste projeto. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.2.0] - 2026-10-23
+
+Recursos para construir um e-commerce sobre a biblioteca.
+
+### Adicionado
+- Pacote `mptest`: Mercado Pago falso em memória para testes ponta a ponta, com `Approve`, `Expire`, `ChargeBack`, webhooks assinados, `FailNext`, relógio controlável e registro das requisições.
+- Dados do pedido em `CreatePixRequest`: `Items` (`Item`, `ItemsTotal`) e `Shipment`; `Payer.Phone` e `Payer.Address`. Enviados em `additional_info`. `Amount` zero usa a soma dos itens.
+- `CPF`, `CNPJ`, `ValidCPF` e `ValidCNPJ`; CPF/CNPJ do pagador validados antes da chamada e enviados só com dígitos.
+- `GetOrCreatePix` (reaproveita o PIX pagável do pedido) e `FindByExternalReference`.
+- `Payment.CheckOrder` e `ErrOrderMismatch`, para conferir referência e valor antes de liberar o pedido.
+- `Payment.IsPayable`, `Payment.RefundableAmount`; campos `NetReceivedAmount`, `TotalPaidAmount`, `MoneyReleaseDate`, `Payer` e `PayerID`.
+- `ParseAmount` para valores digitados ("1.234,56", "R$ 10,00", "10.50").
+- `WithLogger` (`log/slog`): uma linha por tentativa HTTP, sem token.
+- `WebhookReceiver.Wait` para desligamento gracioso e `WebhookConfig.MaxConcurrent` no modo assíncrono.
+- `SignWebhook`, para testar handlers de webhook.
+
+### Alterado
+- `NewWebhookHandler` e `WebhookHandler` devolvem `*WebhookReceiver` (continua sendo um `http.Handler`).
+- `Amount` é decodificado do JSON sem passar por `float64`.
+- User-Agent `mercadopago-sdk-go/1.2.0`.
+
 ## [1.1.1] - 2026-10-23
 
 ### Adicionado
@@ -54,6 +75,7 @@ Reescrita em Go da biblioteca Python [mercadopagovp](https://github.com/reinanbr
 - Idempotência automática, retry com backoff e `context.Context` em todas as chamadas.
 - Validação de assinatura de webhooks e `WebhookHandler`.
 
+[1.2.0]: https://github.com/reinanbr/mercadopago-sdk-go/releases/tag/v1.2.0
 [1.1.1]: https://github.com/reinanbr/mercadopago-sdk-go/releases/tag/v1.1.1
 [1.1.0]: https://github.com/reinanbr/mercadopago-sdk-go/releases/tag/v1.1.0
 [1.0.0]: https://github.com/reinanbr/mercadopago-sdk-go/blob/v1.1.0/CHANGELOG.md#100---2026-10-23

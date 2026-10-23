@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -183,6 +184,13 @@ func signManifest(secret, dataID, requestID, ts string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// SignWebhook returns an x-signature header for a notification, as
+// Mercado Pago computes it. It is meant for tests of webhook handlers.
+func SignWebhook(secret, dataID, requestID string, ts time.Time) string {
+	t := strconv.FormatInt(ts.Unix(), 10)
+	return "ts=" + t + ",v1=" + signManifest(secret, dataID, requestID, t)
+}
+
 // VerifySignature checks the x-signature header of a webhook using the
 // secret from your Mercado Pago application. dataID is the "data.id" query
 // parameter. If tolerance > 0, signatures older than that are rejected.
@@ -255,83 +263,149 @@ type WebhookConfig struct {
 	// Timeout bounds the payment fetch plus Handle in async mode
 	// (default 2 minutes).
 	Timeout time.Duration
+	// MaxConcurrent limits how many notifications are processed at once
+	// in async mode (default 32). Beyond it the handler answers 503 and
+	// Mercado Pago delivers the notification again later.
+	MaxConcurrent int
 	// OnError receives errors from async processing and rejected
 	// signatures (for logging). Optional.
 	OnError func(n *Notification, err error)
+}
+
+// WebhookReceiver is the http.Handler returned by NewWebhookHandler.
+type WebhookReceiver struct {
+	client *Client
+	cfg    WebhookConfig
+
+	mu     sync.Mutex
+	active int           // async notifications being processed
+	idle   chan struct{} // closed when active drops to 0
 }
 
 // NewWebhookHandler returns an http.Handler for payment webhooks.
 //
 // Synchronous mode answers 401 on a bad signature, 200 for non-payment
 // events, 502 if the payment cannot be fetched and 500 if Handle fails, so
-// Mercado Pago retries the delivery.
-func (c *Client) NewWebhookHandler(cfg WebhookConfig) http.Handler {
+// Mercado Pago retries the delivery. In async mode, call Wait on shutdown
+// so notifications already acknowledged are not lost.
+func (c *Client) NewWebhookHandler(cfg WebhookConfig) *WebhookReceiver {
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 2 * time.Minute
 	}
-	report := func(n *Notification, err error) {
-		if cfg.OnError != nil {
-			cfg.OnError(n, err)
-		}
+	if cfg.MaxConcurrent <= 0 {
+		cfg.MaxConcurrent = 32
 	}
-	process := func(ctx context.Context, id int64) (status int, err error) {
-		p, err := c.GetPayment(ctx, id)
-		if err != nil {
-			return http.StatusBadGateway, err
-		}
-		if err := cfg.Handle(ctx, p); err != nil {
-			return http.StatusInternalServerError, err
-		}
-		return http.StatusOK, nil
+	return &WebhookReceiver{client: c, cfg: cfg}
+}
+
+// acquire reserves a slot for async processing, if one is free.
+func (h *WebhookReceiver) acquire() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.active >= h.cfg.MaxConcurrent {
+		return false
+	}
+	if h.active == 0 {
+		h.idle = make(chan struct{})
+	}
+	h.active++
+	return true
+}
+
+func (h *WebhookReceiver) release() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.active--; h.active == 0 {
+		close(h.idle)
+	}
+}
+
+func (h *WebhookReceiver) report(n *Notification, err error) {
+	if h.cfg.OnError != nil {
+		h.cfg.OnError(n, err)
+	}
+}
+
+func (h *WebhookReceiver) process(ctx context.Context, id int64) (status int, err error) {
+	p, err := h.client.GetPayment(ctx, id)
+	if err != nil {
+		return http.StatusBadGateway, err
+	}
+	if err := h.cfg.Handle(ctx, p); err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusOK, nil
+}
+
+func (h *WebhookReceiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	n, err := parseWebhook(r, h.cfg.Validator)
+	var sigErr *SignatureError
+	if errors.As(err, &sigErr) {
+		h.report(&Notification{RequestID: sigErr.RequestID}, err)
+		http.Error(w, "invalid signature", http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	id, err := n.PaymentID()
+	if err != nil {
+		w.WriteHeader(http.StatusOK) // not a payment event: acknowledge and ignore
+		return
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		n, err := parseWebhook(r, cfg.Validator)
-		var sigErr *SignatureError
-		if errors.As(err, &sigErr) {
-			report(&Notification{RequestID: sigErr.RequestID}, err)
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
-			return
-		}
-		if err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		id, err := n.PaymentID()
-		if err != nil {
-			w.WriteHeader(http.StatusOK) // not a payment event: acknowledge and ignore
-			return
-		}
-
-		if cfg.Async {
-			w.WriteHeader(http.StatusOK)
-			go func() {
-				ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), cfg.Timeout)
-				defer cancel()
-				if _, err := process(ctx, id); err != nil {
-					report(n, err)
-				}
-			}()
-			return
-		}
-
-		status, err := process(r.Context(), id)
-		if err != nil {
-			report(n, err)
-			http.Error(w, http.StatusText(status), status)
+	if h.cfg.Async {
+		if !h.acquire() {
+			http.Error(w, "busy", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-	})
+		go func() {
+			defer h.release()
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), h.cfg.Timeout)
+			defer cancel()
+			if _, err := h.process(ctx, id); err != nil {
+				h.report(n, err)
+			}
+		}()
+		return
+	}
+
+	status, err := h.process(r.Context(), id)
+	if err != nil {
+		h.report(n, err)
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// Wait blocks until the notifications being processed in async mode
+// finish, or ctx is done. Call it after http.Server.Shutdown.
+func (h *WebhookReceiver) Wait(ctx context.Context) error {
+	h.mu.Lock()
+	if h.active == 0 {
+		h.mu.Unlock()
+		return nil
+	}
+	idle := h.idle
+	h.mu.Unlock()
+	select {
+	case <-idle:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // WebhookHandler is a shortcut for NewWebhookHandler in synchronous mode,
 // validating signatures with secret (if non-empty).
-func (c *Client) WebhookHandler(secret string, fn func(ctx context.Context, p *Payment) error) http.Handler {
+func (c *Client) WebhookHandler(secret string, fn func(ctx context.Context, p *Payment) error) *WebhookReceiver {
 	cfg := WebhookConfig{Handle: fn}
 	if secret != "" {
 		cfg.Validator = &WebhookValidator{Secret: secret}

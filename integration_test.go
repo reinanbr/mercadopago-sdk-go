@@ -456,3 +456,40 @@ func TestIntegrationRequestIDOnErrors(t *testing.T) {
 		t.Error("API did not return X-Request-Id")
 	}
 }
+
+func TestIntegrationOrderData(t *testing.T) {
+	c := integrationClient(t)
+	ctx := itCtx(t)
+	payer := itPayer()
+	payer.FirstName, payer.LastName = "Ana", "Souza"
+	payer.Identification = CPF("529.982.247-25")
+	payer.Phone = &Phone{AreaCode: "11", Number: "987654321"}
+	payer.Address = &Address{ZipCode: "01310-100", StreetName: "Av. Paulista", StreetNumber: "1000"}
+	req := CreatePixRequest{
+		Items: []Item{
+			{ID: "SKU-1", Title: "Camiseta", CategoryID: "fashion", Quantity: 2, UnitPrice: Reais(1.50)},
+			{ID: "SKU-2", Title: "Adesivo", Quantity: 1, UnitPrice: Reais(0.50)},
+		},
+		Description:       "Pedido de integração",
+		Payer:             payer,
+		Shipment:          &Address{ZipCode: "01310-100", StreetName: "Av. Paulista", StreetNumber: "1000", City: "São Paulo", State: "SP", Complement: "apto 1"},
+		ExternalReference: itRef("order"),
+		ExpiresIn:         30 * time.Minute,
+	}
+	p, created, err := c.GetOrCreatePix(ctx, req)
+	if err != nil {
+		logAPIError(t, err)
+		t.Fatalf("GetOrCreatePix: %v", err)
+	}
+	t.Cleanup(func() { _, _ = c.CancelPayment(context.Background(), p.ID) })
+	logPayment(t, p)
+	if !created || p.Amount != Reais(3.50) || !p.IsPayable() {
+		t.Fatalf("created=%v amount=%s payable=%v", created, p.Amount, p.IsPayable())
+	}
+	if err := p.CheckOrder(req.ExternalReference, Reais(3.50)); err != nil {
+		t.Error(err)
+	}
+	if !strings.Contains(string(p.Raw), `"SKU-1"`) {
+		t.Errorf("additional_info.items not echoed back: %s", p.Raw)
+	}
+}

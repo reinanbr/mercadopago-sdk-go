@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -30,6 +31,7 @@ type Client struct {
 	userAgent  string
 	headers    http.Header
 	retry      RetryPolicy
+	logger     *slog.Logger
 }
 
 // RetryPolicy controls how transient failures are retried. Network errors
@@ -105,6 +107,11 @@ func WithRetries(n int, wait time.Duration) Option {
 	return func(c *Client) { c.retry.MaxRetries, c.retry.InitialDelay = n, wait }
 }
 
+// WithLogger logs every HTTP attempt: method, path, status, duration and
+// the X-Request-Id of the response, at Debug level when it succeeds and
+// Warn when it fails. Tokens and bodies are never logged.
+func WithLogger(l *slog.Logger) Option { return func(c *Client) { c.logger = l } }
+
 // WithHeader adds a header sent on every request.
 func WithHeader(key, value string) Option { return func(c *Client) { c.headers.Set(key, value) } }
 
@@ -129,7 +136,7 @@ func New(accessToken string, opts ...Option) (*Client, error) {
 		token:      accessToken,
 		baseURL:    DefaultBaseURL,
 		httpClient: &http.Client{Timeout: 60 * time.Second},
-		userAgent:  "mercadopago-sdk-go/1.1.1",
+		userAgent:  "mercadopago-sdk-go/1.2.0",
 		headers:    http.Header{},
 		retry:      DefaultRetryPolicy(),
 	}
@@ -289,7 +296,11 @@ func (c *Client) attempt(ctx context.Context, r request, target string, payload 
 		req.Header.Set("X-Idempotency-Key", cc.idempotencyKey)
 	}
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+	if c.logger != nil {
+		defer func() { c.log(ctx, r, resp, time.Since(start), err) }()
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return false, 0, ctx.Err()
@@ -313,6 +324,19 @@ func (c *Client) attempt(ctx context.Context, r request, target string, payload 
 		}
 	}
 	return false, 0, nil
+}
+
+func (c *Client) log(ctx context.Context, r request, resp *http.Response, d time.Duration, err error) {
+	attrs := []slog.Attr{slog.String("method", r.method), slog.String("path", r.path), slog.Duration("duration", d)}
+	if resp != nil {
+		attrs = append(attrs, slog.Int("status", resp.StatusCode), slog.String("request_id", resp.Header.Get("X-Request-Id")))
+	}
+	if err != nil {
+		attrs = append(attrs, slog.String("error", err.Error()))
+		c.logger.LogAttrs(ctx, slog.LevelWarn, "mercadopago request failed", attrs...)
+		return
+	}
+	c.logger.LogAttrs(ctx, slog.LevelDebug, "mercadopago request", attrs...)
 }
 
 // backoff returns the wait before the given retry (1-based).

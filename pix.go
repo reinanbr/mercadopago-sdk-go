@@ -2,6 +2,7 @@ package mercadopagopix
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/mail"
@@ -14,9 +15,16 @@ const expirationLayout = "2006-01-02T15:04:05.000-07:00"
 
 // CreatePixRequest describes a PIX charge.
 type CreatePixRequest struct {
-	Amount      Amount // required, > 0
+	// Amount is the total to charge. If zero, the total of Items is used.
+	Amount      Amount
 	Description string
 	Payer       Payer // Payer.Email is required
+
+	// Items are the order lines and Shipment the delivery address. Both
+	// are optional; Mercado Pago uses them in its fraud analysis. Amount
+	// may differ from the items' total (shipping, discounts).
+	Items    []Item
+	Shipment *Address
 
 	// NotificationURL receives webhooks about this payment (http/https).
 	NotificationURL string
@@ -36,6 +44,14 @@ type CreatePixRequest struct {
 }
 
 func (r *CreatePixRequest) validate() error {
+	for i, it := range r.Items {
+		if it.Title == "" || it.Quantity <= 0 || it.UnitPrice < 0 {
+			return fmt.Errorf("%w: item %d needs a title, a positive quantity and a non-negative price", ErrInvalidRequest, i)
+		}
+	}
+	if r.Amount == 0 {
+		r.Amount = ItemsTotal(r.Items)
+	}
 	if r.Amount <= 0 {
 		return fmt.Errorf("%w: amount must be greater than zero", ErrInvalidRequest)
 	}
@@ -44,6 +60,11 @@ func (r *CreatePixRequest) validate() error {
 	}
 	if a, err := mail.ParseAddress(r.Payer.Email); err != nil || a.Address != r.Payer.Email {
 		return fmt.Errorf("%w: invalid payer email %q", ErrInvalidRequest, r.Payer.Email)
+	}
+	if id := r.Payer.Identification; id != nil {
+		if err := id.validate(); err != nil {
+			return err
+		}
 	}
 	if r.ExpiresIn < 0 {
 		return fmt.Errorf("%w: ExpiresIn must not be negative", ErrInvalidRequest)
@@ -61,14 +82,46 @@ func (r *CreatePixRequest) validate() error {
 }
 
 type createPaymentBody struct {
-	TransactionAmount Amount         `json:"transaction_amount"`
-	PaymentMethodID   string         `json:"payment_method_id"`
-	Description       string         `json:"description,omitempty"`
-	Payer             Payer          `json:"payer"`
-	NotificationURL   string         `json:"notification_url,omitempty"`
-	ExternalReference string         `json:"external_reference,omitempty"`
-	DateOfExpiration  string         `json:"date_of_expiration,omitempty"`
-	Metadata          map[string]any `json:"metadata,omitempty"`
+	TransactionAmount Amount          `json:"transaction_amount"`
+	PaymentMethodID   string          `json:"payment_method_id"`
+	Description       string          `json:"description,omitempty"`
+	Payer             Payer           `json:"payer"`
+	NotificationURL   string          `json:"notification_url,omitempty"`
+	ExternalReference string          `json:"external_reference,omitempty"`
+	DateOfExpiration  string          `json:"date_of_expiration,omitempty"`
+	Metadata          map[string]any  `json:"metadata,omitempty"`
+	AdditionalInfo    *additionalInfo `json:"additional_info,omitempty"`
+}
+
+type additionalInfo struct {
+	Items     []Item           `json:"items,omitempty"`
+	Payer     *additionalPayer `json:"payer,omitempty"`
+	Shipments *struct {
+		ReceiverAddress *Address `json:"receiver_address"`
+	} `json:"shipments,omitempty"`
+}
+
+type additionalPayer struct {
+	FirstName string   `json:"first_name,omitempty"`
+	LastName  string   `json:"last_name,omitempty"`
+	Phone     *Phone   `json:"phone,omitempty"`
+	Address   *Address `json:"address,omitempty"`
+}
+
+func (r *CreatePixRequest) additionalInfo() *additionalInfo {
+	ai := additionalInfo{Items: r.Items}
+	if r.Payer.Phone != nil || r.Payer.Address != nil {
+		ai.Payer = &additionalPayer{r.Payer.FirstName, r.Payer.LastName, r.Payer.Phone, r.Payer.Address}
+	}
+	if r.Shipment != nil {
+		ai.Shipments = &struct {
+			ReceiverAddress *Address `json:"receiver_address"`
+		}{r.Shipment}
+	}
+	if ai.Items == nil && ai.Payer == nil && ai.Shipments == nil {
+		return nil
+	}
+	return &ai
 }
 
 // CreatePix creates a PIX payment and returns it with its QR code.
@@ -78,14 +131,17 @@ func (c *Client) CreatePix(ctx context.Context, req CreatePixRequest, opts ...Ca
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
+	payer := req.Payer
+	payer.Identification = payer.Identification.normalized()
 	body := createPaymentBody{
 		TransactionAmount: req.Amount,
 		PaymentMethodID:   "pix",
 		Description:       req.Description,
-		Payer:             req.Payer,
+		Payer:             payer,
 		NotificationURL:   req.NotificationURL,
 		ExternalReference: req.ExternalReference,
 		Metadata:          req.Metadata,
+		AdditionalInfo:    req.additionalInfo(),
 	}
 	switch {
 	case !req.ExpiresAt.IsZero():
@@ -173,6 +229,55 @@ func (c *Client) SearchByExternalReference(ctx context.Context, ref string, opts
 		return nil, err
 	}
 	return res.Results, nil
+}
+
+// FindByExternalReference returns the newest payment with the given
+// external reference for which match returns true (nil matches any). It
+// returns an error wrapping ErrNotFound if there is none. For example, the
+// approved payment of an order:
+//
+//	p, err := client.FindByExternalReference(ctx, "pedido-42", (*mercadopagopix.Payment).IsPaid)
+//
+// The search index lags a few seconds behind payment creation.
+func (c *Client) FindByExternalReference(ctx context.Context, ref string, match func(*Payment) bool, opts ...CallOption) (*Payment, error) {
+	if ref == "" {
+		return nil, fmt.Errorf("%w: external reference is required", ErrInvalidRequest)
+	}
+	for p, err := range c.AllPayments(ctx, SearchParams{ExternalReference: ref, Limit: 100}, opts...) {
+		if err != nil {
+			return nil, err
+		}
+		if match == nil || match(p) {
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: no matching payment for external reference %q", ErrNotFound, ref)
+}
+
+// GetOrCreatePix returns a PIX of the order that can still be paid, with
+// the same amount, or creates one. Use it in the checkout page so a
+// customer who reloads it sees the same QR code instead of piling up
+// charges. req.ExternalReference is required. Set req.IdempotencyKey too
+// (e.g. order ID plus attempt number) to cover the seconds in which a new
+// payment is not yet searchable.
+func (c *Client) GetOrCreatePix(ctx context.Context, req CreatePixRequest, opts ...CallOption) (p *Payment, created bool, err error) {
+	if req.ExternalReference == "" {
+		return nil, false, fmt.Errorf("%w: external reference is required", ErrInvalidRequest)
+	}
+	if err := req.validate(); err != nil {
+		return nil, false, err
+	}
+	p, err = c.FindByExternalReference(ctx, req.ExternalReference, func(p *Payment) bool {
+		return p.IsPayable() && p.Amount == req.Amount && p.PaymentMethodID == "pix"
+	}, opts...)
+	if err == nil {
+		return p, false, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return nil, false, err
+	}
+	p, err = c.CreatePix(ctx, req, opts...)
+	return p, err == nil, err
 }
 
 // WaitForPayment polls a payment every interval until its status is final
