@@ -1,0 +1,5 @@
+.env
+.env.test
+.env.*.local
+*.out
+qrcode.png

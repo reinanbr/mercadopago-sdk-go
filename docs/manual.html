@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mercadopagopix — Manual avançado</title>
+<meta name="description" content="Manual de uso avançado da biblioteca Go mercadopagopix para pagamentos PIX no Mercado Pago.">
+<style>
+:root {
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --surface-2: #f3f3f1;
+  --text: #1d1d1b;
+  --muted: #62625d;
+  --border: #e3e3df;
+  --accent: #0b6e6e;
+  --accent-soft: #e2f2f1;
+  --code-bg: #f5f5f2;
+  --kw: #8a3ab9;
+  --str: #2f7d32;
+  --com: #8b8b84;
+  --num: #b35c00;
+  --fn: #1f5fbf;
+  --ok: #2f7d32;
+  --warn: #9a6400;
+  --warn-soft: #fff4dc;
+  --bad: #b3261e;
+  --bad-soft: #fde8e6;
+  --radius: 10px;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413;
+    --surface: #1c1c1a;
+    --surface-2: #242422;
+    --text: #ecebe6;
+    --muted: #a3a29b;
+    --border: #33332f;
+    --accent: #5cc8c3;
+    --accent-soft: #163332;
+    --code-bg: #1f1f1d;
+    --kw: #d19bf0;
+    --str: #8fd197;
+    --com: #7c7b74;
+    --num: #f0a95c;
+    --fn: #8ab4f8;
+    --ok: #8fd197;
+    --warn: #f0c46c;
+    --warn-soft: #33290f;
+    --bad: #f28b82;
+    --bad-soft: #3a1c1a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413;
+  --surface: #1c1c1a;
+  --surface-2: #242422;
+  --text: #ecebe6;
+  --muted: #a3a29b;
+  --border: #33332f;
+  --accent: #5cc8c3;
+  --accent-soft: #163332;
+  --code-bg: #1f1f1d;
+  --kw: #d19bf0;
+  --str: #8fd197;
+  --com: #7c7b74;
+  --num: #f0a95c;
+  --fn: #8ab4f8;
+  --ok: #8fd197;
+  --warn: #f0c46c;
+  --warn-soft: #33290f;
+  --bad: #f28b82;
+  --bad-soft: #3a1c1a;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 5px; border: 1px solid var(--border); }
+pre code { background: none; border: 0; padding: 0; font-size: 13.5px; }
+
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
+nav.toc {
+  position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+  padding: 28px 18px 40px 24px; border-right: 1px solid var(--border); font-size: 14px;
+}
+nav.toc .brand { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; margin-bottom: 2px; }
+nav.toc .brand span { color: var(--accent); }
+nav.toc .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+nav.toc li { margin: 1px 0; }
+nav.toc a { display: block; padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+nav.toc a:hover { background: var(--surface-2); color: var(--text); }
+nav.toc a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+nav.toc .theme { margin-top: 18px; }
+button.ghost {
+  font: inherit; font-size: 13px; color: var(--muted); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+button.ghost:hover { color: var(--text); }
+
+main { padding: 40px 48px 120px; min-width: 0; }
+header.hero { margin-bottom: 36px; }
+header.hero h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 10px; }
+header.hero p { color: var(--muted); margin: 0; max-width: 70ch; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.badge { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+
+section { padding-top: 12px; margin-bottom: 44px; }
+h2 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+h4 { font-size: 15px; margin: 20px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+p, li { max-width: 78ch; }
+.lead { color: var(--muted); margin-top: 4px; }
+
+.code { position: relative; margin: 14px 0 18px; }
+.code pre {
+  margin: 0; overflow-x: auto; padding: 16px 84px 16px 18px; background: var(--code-bg);
+  border: 1px solid var(--border); border-radius: var(--radius); line-height: 1.55;
+}
+.code .lang { display: none; }
+.code button.copy { position: absolute; top: 6px; right: 8px; font-size: 12px; padding: 3px 8px; }
+.tok-kw { color: var(--kw); }
+.tok-str { color: var(--str); }
+.tok-com { color: var(--com); font-style: italic; }
+.tok-num { color: var(--num); }
+.tok-fn { color: var(--fn); }
+
+.table-wrap { overflow-x: auto; margin: 14px 0 18px; border: 1px solid var(--border); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; background: var(--surface); }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+
+.callout { border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--surface); border-radius: var(--radius); padding: 12px 16px; margin: 16px 0; }
+.callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.callout.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+.callout strong:first-child { display: block; margin-bottom: 2px; }
+.callout p { margin: 4px 0; }
+
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 14px; }
+.flow .step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; }
+.flow .step.final { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.flow .arrow { color: var(--muted); }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.card h4 { margin-top: 0; }
+.card ul { margin: 6px 0 0; padding-left: 18px; }
+
+.ok { color: var(--ok); font-weight: 600; }
+.no { color: var(--bad); font-weight: 600; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 18px; }
+
+.menu-btn { display: none; }
+@media (max-width: 920px) {
+  .layout { grid-template-columns: 1fr; }
+  nav.toc { position: fixed; inset: 0 30% 0 0; z-index: 10; background: var(--bg); transform: translateX(-100%); transition: transform .2s; }
+  nav.toc.open { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.25); }
+  main { padding: 64px 16px 80px; }
+  header.hero h1 { font-size: 27px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .menu-btn { display: block; position: fixed; top: 12px; left: 12px; z-index: 11; }
+}
+@media print {
+  nav.toc, .menu-btn, button.copy { display: none !important; }
+  .layout { display: block; }
+  main { padding: 0; }
+}
+</style>
+</head>
+<body>
+<button class="ghost menu-btn" id="menuBtn" aria-label="Abrir sumário">☰ Sumário</button>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Sumário">
+  <div class="brand">mercado<span>pago</span>pix</div>
+  <div class="sub">Manual de uso avançado · v1.1.0</div>
+  <ol>
+    <li><a href="#visao">Visão geral</a></li>
+    <li><a href="#cliente">Configurando o cliente</a></li>
+    <li><a href="#chamada">Opções por chamada</a></li>
+    <li><a href="#dinheiro">Valores (Amount)</a></li>
+    <li><a href="#criar">Criando cobranças</a></li>
+    <li><a href="#ciclo">Ciclo de vida e status</a></li>
+    <li><a href="#estornos">Cancelamento e estornos</a></li>
+    <li><a href="#busca">Busca e paginação</a></li>
+    <li><a href="#retry">Retry e resiliência</a></li>
+    <li><a href="#erros">Tratamento de erros</a></li>
+    <li><a href="#webhooks">Webhooks</a></li>
+    <li><a href="#raw">Chamadas cruas (Do)</a></li>
+    <li><a href="#receitas">Receitas</a></li>
+    <li><a href="#sandbox">Sandbox e testes</a></li>
+    <li><a href="#sdk">Comparação com o SDK oficial</a></li>
+    <li><a href="#referencia">Referência rápida</a></li>
+  </ol>
+  <div class="theme"><button class="ghost" id="themeBtn">Alternar tema</button></div>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>Manual avançado do mercadopagopix</h1>
+  <p>Biblioteca Go, sem dependências, para criar e acompanhar pagamentos PIX pela API do Mercado Pago. Este manual vai além do README: configuração fina, idempotência, marketplace, paginação, resiliência, webhooks em produção e o comportamento real do sandbox.</p>
+  <div class="badges">
+    <span class="badge">v1.1.0</span>
+    <span class="badge">Go 1.23+</span>
+    <span class="badge">Só biblioteca padrão</span>
+    <span class="badge">35 testes unitários · 87,5% de cobertura</span>
+    <span class="badge">15 testes de integração no sandbox</span>
+  </div>
+</header>
+
+<section id="visao">
+  <h2>1. Visão geral</h2>
+  <p class="lead">Um <code>Client</code> imutável e seguro para uso concorrente encapsula token, cabeçalhos fixos, timeout e a política de retry. Todos os métodos recebem <code>context.Context</code> e aceitam <a href="#chamada">opções por chamada</a> no fim.</p>
+  <div class="code"><span class="lang">go</span><pre><code class="go">import mp "github.com/reinanbr/mercadopago-sdk-go" // pacote mercadopagopix
+
+client, err := mp.NewFromEnv(
+    mp.WithIntegratorID("dev_123"),
+    mp.WithTimeout(20 * time.Second),
+)
+if err != nil {
+    log.Fatal(err) // mp.ErrMissingToken se nenhuma variável estiver definida
+}
+
+p, err := client.CreatePix(ctx, mp.CreatePixRequest{
+    Amount:            mp.Reais(49.90),
+    Description:       "Pedido #1042",
+    Payer:             mp.Payer{Email: "cliente@example.com"},
+    ExternalReference: "pedido-1042",
+    ExpiresIn:         30 * time.Minute,
+}, mp.WithIdempotencyKey("pedido-1042"))</code></pre></div>
+  <div class="grid2">
+    <div class="card"><h4>Arquivos da lib</h4><ul>
+      <li><code>client.go</code>: cliente, opções, retry, <code>Do</code></li>
+      <li><code>pix.go</code>: criar, consultar, cancelar, estornar, aguardar</li>
+      <li><code>search.go</code>: busca e iterador de paginação</li>
+      <li><code>webhook.go</code>: validador de assinatura e handler HTTP</li>
+      <li><code>payment.go</code>, <code>amount.go</code>, <code>errors.go</code>, <code>env.go</code></li>
+    </ul></div>
+    <div class="card"><h4>Ferramentas</h4><ul>
+      <li><code>make test</code>: testes unitários</li>
+      <li><code>make test-integration</code>: testes no sandbox real</li>
+      <li><code>make report</code>: relatórios em <code>reports/*.md</code></li>
+      <li><code>examples/create</code>, <code>examples/webhook</code></li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="cliente">
+  <h2>2. Configurando o cliente</h2>
+  <h3>Credenciais</h3>
+  <p><code>New(token)</code> recebe o token direto. <code>NewFromEnv()</code> procura, em ordem, <code>MERCADOPAGO_ACCESS_TOKEN</code>, <code>ACCESS_TOKEN</code> e <code>TOKEN</code>. Para ler um arquivo <code>.env</code> sem dependências externas:</p>
+  <div class="code"><span class="lang">go</span><pre><code class="go">// Carrega o .env no ambiente sem sobrescrever variáveis já definidas.
+_ = mp.LoadEnvFile(".env")
+
+// Ou só leia os valores, sem tocar no ambiente do processo
+// (útil quando o arquivo tem chaves como USER, que colidem com o shell).
+vars, err := mp.ReadEnvFile(".env.test")
+client, err := mp.New(vars["ACCESS_TOKEN"])
+
+client.TestMode()        // true para tokens "TEST-"
+acc, err := client.Me(ctx) // conta dona do token: ID, Nickname, SiteID, Tags
+acc.IsTestUser()         // a conta é um usuário de teste do MP?</code></pre></div>
+  <div class="callout warn"><strong>Produção x teste</strong><p>Tokens <code>APP_USR-</code> movimentam dinheiro de verdade. Use <code>client.TestMode()</code> como trava em scripts e testes; os testes de integração desta lib se recusam a rodar com token de produção, a menos que <code>MP_ALLOW_LIVE=1</code>.</p></div>
+
+  <h3>Opções do cliente</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Opção</th><th>Padrão</th><th>Uso</th></tr>
+    <tr><td><code>WithTimeout(d)</code></td><td>60s</td><td>Timeout de cada tentativa HTTP (o <code>ctx</code> limita a chamada inteira, com os retries).</td></tr>
+    <tr><td><code>WithHTTPClient(h)</code></td><td><code>http.Client</code> com timeout de 60s</td><td>Transporte próprio: proxy, mTLS, tracing (OpenTelemetry), pool de conexões.</td></tr>
+    <tr><td><code>WithRetryPolicy(p)</code></td><td><code>DefaultRetryPolicy()</code></td><td>Política completa de retry. Veja <a href="#retry">Retry</a>.</td></tr>
+    <tr><td><code>WithRetries(n, wait)</code></td><td>3, 500ms</td><td>Atalho que muda só a quantidade e o atraso inicial.</td></tr>
+    <tr><td><code>WithIntegratorID(id)</code></td><td>—</td><td>Envia <code>X-Integrator-Id</code> (desenvolvedor/agência certificada).</td></tr>
+    <tr><td><code>WithPlatformID(id)</code></td><td>—</td><td>Envia <code>X-Platform-Id</code> (plataforma de e-commerce).</td></tr>
+    <tr><td><code>WithCorporationID(id)</code></td><td>—</td><td>Envia <code>X-Corporation-Id</code> (agrupa contas de uma corporação).</td></tr>
+    <tr><td><code>WithHeader(k, v)</code></td><td>—</td><td>Qualquer cabeçalho fixo em todas as chamadas.</td></tr>
+    <tr><td><code>WithUserAgent(ua)</code></td><td><code>mercadopago-sdk-go/1.1.0</code></td><td>Identifica sua aplicação nos logs do MP.</td></tr>
+    <tr><td><code>WithBaseURL(u)</code></td><td><code>https://api.mercadopago.com</code></td><td>Aponte para um <code>httptest.Server</code> nos testes.</td></tr>
+  </table></div>
+  <div class="code"><span class="lang">go</span><pre><code class="go">transport := otelhttp.NewTransport(http.DefaultTransport) // exemplo com tracing
+client, _ := mp.New(token,
+    mp.WithHTTPClient(&amp;http.Client{Transport: transport}),
+    mp.WithTimeout(15 * time.Second),   // aplicado sobre o client acima
+    mp.WithPlatformID("minha-plataforma"),
+)</code></pre></div>
+  <div class="callout"><strong>Ordem importa</strong><p><code>WithTimeout</code> copia o <code>http.Client</code> atual e muda o timeout. Coloque-o <em>depois</em> de <code>WithHTTPClient</code>, senão o seu client substitui o timeout.</p></div>
+</section>
+
+<section id="chamada">
+  <h2>3. Opções por chamada</h2>
+  <p class="lead">Todo método aceita <code>...CallOption</code> no fim. Elas valem só para aquela chamada e para todas as suas tentativas de retry.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Opção</th><th>Efeito</th></tr>
+    <tr><td><code>WithIdempotencyKey(k)</code></td><td>Define o <code>X-Idempotency-Key</code> (1 a 64 caracteres). Repetir a chave devolve o resultado da primeira requisição, sem nova cobrança ou estorno.</td></tr>
+    <tr><td><code>WithAccessToken(t)</code></td><td>Usa outro token nesta chamada, por exemplo o token OAuth de um vendedor em um marketplace.</td></tr>
+    <tr><td><code>WithCallHeader(k, v)</code></td><td>Cabeçalho extra só nesta chamada (sobrepõe o <code>WithHeader</code> do cliente).</td></tr>
+  </table></div>
+  <h3>Marketplace: um cliente, muitos vendedores</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">// Um único Client (com retry, timeout e headers) atende todos os vendedores.
+func cobrar(ctx context.Context, seller Seller, pedido Pedido) (*mp.Payment, error) {
+    return client.CreatePix(ctx, mp.CreatePixRequest{
+        Amount:            pedido.Total,
+        Payer:             mp.Payer{Email: pedido.Email},
+        ExternalReference: pedido.ID,
+    },
+        mp.WithAccessToken(seller.OAuthToken),  // cobrança cai na conta do vendedor
+        mp.WithIdempotencyKey("pix-"+pedido.ID),
+    )
+}</code></pre></div>
+  <h3>Precedência da chave de idempotência</h3>
+  <div class="flow"><span class="step"><code>WithIdempotencyKey</code></span><span class="arrow">›</span><span class="step"><code>CreatePixRequest.IdempotencyKey</code></span><span class="arrow">›</span><span class="step">UUID aleatório</span></div>
+  <p>Requisições <code>POST</code> sempre levam uma chave. <code>GET</code> e <code>PUT</code> só levam se você passar uma.</p>
+</section>
+
+<section id="dinheiro">
+  <h2>4. Valores (<code>Amount</code>)</h2>
+  <p class="lead"><code>Amount</code> é um <code>int64</code> em centavos. Nada de <code>float64</code> acumulando erro de arredondamento.</p>
+  <div class="code"><span class="lang">go</span><pre><code class="go">a := mp.Reais(0.1 + 0.2) // 30 centavos (arredonda para o centavo mais próximo)
+b := mp.Cents(4990)      // R$ 49,90
+total := a + b           // soma inteira, exata
+
+total.String()   // "R$ 50,20"   (formato brasileiro, com milhar: "R$ 1.234,56")
+total.Cents()    // 5020
+total.Float64()  // 50.2
+json.Marshal(b)  // 49.90       (como a API espera)</code></pre></div>
+  <p>Na leitura, <code>Amount</code> aceita número, string numérica e <code>null</code>.</p>
+</section>
+
+<section id="criar">
+  <h2>5. Criando cobranças</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Campo de <code>CreatePixRequest</code></th><th>Obrigatório</th><th>Observações</th></tr>
+    <tr><td><code>Amount</code></td><td class="ok">sim</td><td>Maior que zero (não há mínimo de R$ 2,00 como na lib Python).</td></tr>
+    <tr><td><code>Payer.Email</code></td><td class="ok">sim</td><td>Validado com <code>net/mail</code>; precisa ser um endereço puro (<code>a@b.com</code>, não <code>Nome &lt;a@b.com&gt;</code>).</td></tr>
+    <tr><td><code>Payer.FirstName/LastName</code></td><td>não</td><td>Aparecem no comprovante.</td></tr>
+    <tr><td><code>Payer.Identification</code></td><td>não</td><td><code>{Type: "CPF", Number: "..."}</code>. O sandbox não valida o tipo.</td></tr>
+    <tr><td><code>Description</code></td><td>não</td><td>Texto exibido ao pagador.</td></tr>
+    <tr><td><code>ExternalReference</code></td><td>não</td><td>Seu ID (pedido). É o filtro de busca mais confiável.</td></tr>
+    <tr><td><code>ExpiresAt</code> / <code>ExpiresIn</code></td><td>não</td><td><code>ExpiresAt</code> tem precedência. Sem nenhum dos dois vale o padrão do MP (24h).</td></tr>
+    <tr><td><code>NotificationURL</code></td><td>não</td><td>URL pública http(s). <code>localhost</code> é recusado pela API (causa 4020).</td></tr>
+    <tr><td><code>Metadata</code></td><td>não</td><td>Mapa livre devolvido em <code>Payment.Metadata</code>. Não pode ser alterado depois.</td></tr>
+    <tr><td><code>IdempotencyKey</code></td><td>não</td><td>Veja <a href="#chamada">precedência</a>.</td></tr>
+  </table></div>
+  <h3>Usando o resultado</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">p.QRCode              // PIX "copia e cola" (EMV, começa com 000201...)
+png, _ := p.QRCodePNG() // imagem do QR code já decodificada
+p.TicketURL           // página do MP com o QR (no sandbox: .../sandbox/payments/...)
+p.TimeToExpiration()  // tempo restante (0 se expirado)
+p.Raw                 // JSON completo da resposta, para campos não mapeados
+
+// Servindo o QR code numa rota HTTP:
+http.HandleFunc("/pix/qr.png", func(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "image/png")
+    w.Write(png)
+})</code></pre></div>
+  <div class="callout"><strong>Idempotência por pedido</strong><p>Use o ID do pedido como chave (<code>WithIdempotencyKey("pix-"+pedido.ID)</code>). Se o processo cair depois de enviar e antes de salvar a resposta, a próxima tentativa devolve <em>o mesmo</em> PIX em vez de gerar outro. Isso foi confirmado no sandbox pelo teste <code>TestIntegrationIdempotency</code>.</p></div>
+</section>
+
+<section id="ciclo">
+  <h2>6. Ciclo de vida e status</h2>
+  <div class="flow">
+    <span class="step">pending</span><span class="arrow">→</span><span class="step final">approved</span><span class="arrow">→</span><span class="step final">refunded / charged_back</span>
+  </div>
+  <div class="flow">
+    <span class="step">pending</span><span class="arrow">→</span><span class="step final">cancelled</span><span class="arrow" style="margin-left:8px">(expirou ou <code>CancelPayment</code>)</span>
+  </div>
+  <div class="table-wrap"><table>
+    <tr><th>Constante</th><th>Valor</th><th><code>IsFinal()</code></th></tr>
+    <tr><td><code>StatusPending</code></td><td>pending</td><td>não</td></tr>
+    <tr><td><code>StatusInProcess</code> / <code>StatusAuthorized</code> / <code>StatusInMediation</code></td><td>in_process / authorized / in_mediation</td><td>não</td></tr>
+    <tr><td><code>StatusApproved</code></td><td>approved</td><td class="ok">sim</td></tr>
+    <tr><td><code>StatusRejected</code> / <code>StatusCancelled</code></td><td>rejected / cancelled</td><td class="ok">sim</td></tr>
+    <tr><td><code>StatusRefunded</code> / <code>StatusChargedBack</code></td><td>refunded / charged_back</td><td class="ok">sim</td></tr>
+  </table></div>
+  <h3>Aguardando o pagamento (polling)</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+defer cancel()
+
+p, err := client.WaitForPayment(ctx, id, 5*time.Second)
+switch {
+case errors.Is(err, mp.ErrExpired):
+    // ainda pending após DateOfExpiration
+case errors.Is(err, context.DeadlineExceeded):
+    // p é o último estado conhecido (pode ser nil se nenhuma consulta deu certo)
+case err != nil:
+    // erro de API ou de rede
+case p.IsPaid():
+    // aprovado
+}</code></pre></div>
+  <div class="callout"><strong>Polling x webhook</strong><p>Use <code>WaitForPayment</code> em CLIs, testes e telas de checkout curtas. Em produção, use <a href="#webhooks">webhooks</a> e, se quiser, polling como reforço.</p></div>
+</section>
+
+<section id="estornos">
+  <h2>7. Cancelamento, atualização e estornos</h2>
+  <div class="code"><span class="lang">go</span><pre><code class="go">p, err := client.CancelPayment(ctx, id)             // pending → cancelled (detail: by_collector)
+
+r, err := client.Refund(ctx, id, 0)                  // estorno total
+r, err := client.Refund(ctx, id, mp.Reais(10),       // estorno parcial
+    mp.WithIdempotencyKey("refund-"+pedido.ID+"-1"))
+rs, err := client.ListRefunds(ctx, id)
+r, err := client.GetRefund(ctx, id, refundID)</code></pre></div>
+  <div class="callout warn"><strong>Restrições observadas no sandbox</strong>
+    <p>• Estornar um PIX <em>pendente</em> falha com 400 (causa 120010: "Transaction Intent must be in processed state").</p>
+    <p>• Listar estornos de um PIX pendente retorna 403 ("At least one policy returned UNAUTHORIZED").</p>
+    <p>• <code>UpdatePayment</code> só serve, na prática, para cancelar: <code>metadata</code> (403), <code>external_reference</code> (401) e <code>date_of_expiration</code> (400, causa 4243) são recusados.</p>
+  </div>
+</section>
+
+<section id="busca">
+  <h2>8. Busca e paginação</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Campo de <code>SearchParams</code></th><th>Parâmetro na API</th><th>Padrão</th></tr>
+    <tr><td><code>ExternalReference</code></td><td><code>external_reference</code></td><td>—</td></tr>
+    <tr><td><code>Status</code></td><td><code>status</code></td><td>—</td></tr>
+    <tr><td><code>PaymentMethodID</code></td><td><code>payment_method_id</code></td><td>—</td></tr>
+    <tr><td><code>Begin</code>, <code>End</code>, <code>Range</code></td><td><code>begin_date</code>, <code>end_date</code>, <code>range</code></td><td>range = date_created</td></tr>
+    <tr><td><code>Sort</code>, <code>Criteria</code></td><td><code>sort</code>, <code>criteria</code></td><td>date_created, desc</td></tr>
+    <tr><td><code>Limit</code>, <code>Offset</code></td><td><code>limit</code>, <code>offset</code></td><td>50, 0</td></tr>
+    <tr><td><code>Extra</code></td><td>qualquer outro filtro</td><td>—</td></tr>
+  </table></div>
+  <h3>Uma página</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">page, err := client.SearchPayments(ctx, mp.SearchParams{
+    Status: mp.StatusApproved,
+    Begin:  time.Now().AddDate(0, 0, -7),
+    End:    time.Now(),
+    Limit:  100,
+})
+fmt.Println(page.Paging.Total, len(page.Results))</code></pre></div>
+  <h3>Todas as páginas, com iterador (Go 1.23)</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">var total mp.Amount
+for p, err := range client.AllPayments(ctx, mp.SearchParams{Status: mp.StatusApproved, Limit: 100}) {
+    if err != nil {
+        return err // o erro é entregue uma vez e a iteração termina
+    }
+    total += p.Amount
+    if total > mp.Reais(10_000) {
+        break // parar cedo não busca mais páginas
+    }
+}</code></pre></div>
+  <p>As páginas só são buscadas sob demanda. A iteração para quando uma página vem vazia ou quando o offset alcança <code>paging.total</code>.</p>
+  <div class="callout warn"><strong>Peculiaridades do sandbox</strong><p>No sandbox, só <code>external_reference</code> (sozinho ou com <code>status</code>) encontrou pagamentos, e apenas enquanto um único pagamento usava aquela referência. <code>payment_method_id</code>, intervalos de data e a busca sem filtros devolveram 0 resultados. Em produção a busca é completa; nos testes, use referências únicas.</p></div>
+</section>
+
+<section id="retry">
+  <h2>9. Retry e resiliência</h2>
+  <div class="code"><span class="lang">go</span><pre><code class="go">mp.DefaultRetryPolicy() // = RetryPolicy{
+//     MaxRetries:   3,
+//     InitialDelay: 500 * time.Millisecond, // dobra a cada tentativa
+//     MaxDelay:     30 * time.Second,       // teto para cada espera (inclui Retry-After)
+//     Jitter:       true,                   // espera entre 50% e 100% do valor
+//     RetryOn:      []int{429, 500, 502, 503, 504},
+// }</code></pre></div>
+  <ul>
+    <li><strong>O que é repetido:</strong> erros de rede e os status listados em <code>RetryOn</code>. Erros 4xx de validação nunca são repetidos.</li>
+    <li><strong>Retry-After:</strong> quando a API envia (segundos ou data HTTP), a espera respeita o valor, limitado por <code>MaxDelay</code>.</li>
+    <li><strong>Segurança:</strong> todas as tentativas de uma chamada usam <em>a mesma</em> chave de idempotência, então um POST repetido nunca cobra duas vezes.</li>
+    <li><strong>Contexto:</strong> cancelar o <code>ctx</code> interrompe também a espera entre tentativas.</li>
+  </ul>
+  <h3>Métricas e logs com <code>OnRetry</code></h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">policy := mp.DefaultRetryPolicy()
+policy.OnRetry = func(i mp.RetryInfo) {
+    slog.Warn("mercadopago retry",
+        "method", i.Method, "path", i.Path,
+        "attempt", i.Attempt, "delay", i.Delay, "err", i.Err)
+    retryCounter.WithLabelValues(i.Path).Inc()
+}
+client, _ := mp.New(token, mp.WithRetryPolicy(policy))
+
+// Sem retry (por exemplo, em um job que já tem a própria fila de retentativas):
+client, _ = mp.New(token, mp.WithRetries(0, 0))</code></pre></div>
+</section>
+
+<section id="erros">
+  <h2>10. Tratamento de erros</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Erro</th><th>Quando</th></tr>
+    <tr><td><code>*APIError</code></td><td>Resposta não-2xx: <code>StatusCode</code>, <code>Code</code>, <code>Message</code>, <code>Causes</code>, <code>Body</code>, <code>RequestID</code>.</td></tr>
+    <tr><td><code>ErrNotFound</code></td><td><code>errors.Is</code> para 404.</td></tr>
+    <tr><td><code>ErrUnauthorized</code></td><td><code>errors.Is</code> para 401/403.</td></tr>
+    <tr><td><code>ErrInvalidRequest</code></td><td>Validação local, antes de chamar a API.</td></tr>
+    <tr><td><code>ErrMissingToken</code></td><td>Token vazio.</td></tr>
+    <tr><td><code>ErrExpired</code></td><td><code>WaitForPayment</code>: PIX expirou pendente.</td></tr>
+    <tr><td><code>ErrInvalidSignature</code> / <code>*SignatureError</code></td><td>Webhook com assinatura inválida.</td></tr>
+  </table></div>
+  <div class="code"><span class="lang">go</span><pre><code class="go">p, err := client.CreatePix(ctx, req)
+var apiErr *mp.APIError
+switch {
+case errors.Is(err, mp.ErrInvalidRequest):
+    return http.StatusBadRequest // erro seu: não adianta repetir
+case errors.As(err, &amp;apiErr) &amp;&amp; apiErr.HasCause("4390"):
+    return pedirOutroEmail()
+case errors.As(err, &amp;apiErr):
+    slog.Error("mercadopago", "status", apiErr.StatusCode,
+        "request_id", apiErr.RequestID, // informe ao suporte do MP
+        "err", err)
+}</code></pre></div>
+  <h3>Causas com dica embutida</h3>
+  <p>Para códigos comuns e pouco óbvios, <code>err.Error()</code> já traz um <code>(hint: ...)</code>:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Causa</th><th>Significado</th></tr>
+    <tr><td><code>4390</code></td><td>E-mail do pagador proibido: igual ao do vendedor ou, com credenciais TEST de conta real, um <code>@testuser.com</code>.</td></tr>
+    <tr><td><code>4020</code></td><td><code>notification_url</code> inválida (<code>localhost</code>/endereços privados).</td></tr>
+    <tr><td><code>4243</code></td><td>Atributo não pode ser alterado; PIX só aceita <code>status=cancelled</code>.</td></tr>
+    <tr><td><code>13253</code></td><td>A conta não tem chave PIX cadastrada.</td></tr>
+    <tr><td><code>2000</code></td><td>Pagamento não encontrado.</td></tr>
+  </table></div>
+</section>
+
+<section id="webhooks">
+  <h2>11. Webhooks</h2>
+  <p class="lead">O handler valida a assinatura, busca o pagamento <em>na API</em> (o corpo do webhook nunca é usado como fonte de verdade) e só então chama o seu código.</p>
+  <div class="flow">
+    <span class="step">POST do MP</span><span class="arrow">→</span><span class="step">valida <code>x-signature</code></span><span class="arrow">→</span><span class="step">200 (async)</span><span class="arrow">→</span><span class="step"><code>GetPayment</code></span><span class="arrow">→</span><span class="step final">seu <code>Handle</code></span>
+  </div>
+  <h3>Configuração de produção</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">http.Handle("/webhooks/mercadopago", client.NewWebhookHandler(mp.WebhookConfig{
+    Validator: &amp;mp.WebhookValidator{
+        Secret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
+        Tolerance: 10 * time.Minute, // proteção contra replay
+    },
+    Async:   true,            // responde 200 na hora; MP exige resposta em 22s
+    Timeout: 2 * time.Minute, // limite para GetPayment + Handle
+    Handle: func(ctx context.Context, p *mp.Payment) error {
+        return pedidos.MarcarStatus(ctx, p.ExternalReference, p.Status, p.ID) // idempotente!
+    },
+    OnError: func(n *mp.Notification, err error) {
+        slog.Error("webhook", "request_id", n.RequestID, "err", err)
+    },
+}))</code></pre></div>
+  <div class="grid2">
+    <div class="card"><h4>Modo síncrono (padrão)</h4><ul>
+      <li>401: assinatura inválida</li>
+      <li>200: evento que não é de pagamento (ignorado)</li>
+      <li>502: falha ao buscar o pagamento</li>
+      <li>500: seu <code>Handle</code> retornou erro, e o MP reenvia</li>
+    </ul></div>
+    <div class="card"><h4>Modo assíncrono</h4><ul>
+      <li>200 assim que a assinatura é validada</li>
+      <li>Processamento em goroutine com <code>Timeout</code></li>
+      <li>Erros vão para <code>OnError</code>; não há reenvio automático do MP</li>
+      <li>Use quando o <code>Handle</code> pode demorar</li>
+    </ul></div>
+  </div>
+  <div class="callout warn"><strong>Entregas repetidas</strong><p>Se não receber resposta em 22 segundos, o Mercado Pago reenvia a cada 15 minutos, e pode mandar o mesmo evento mais de uma vez mesmo quando você responde. O seu <code>Handle</code> precisa ser idempotente, por exemplo com um <code>UPDATE ... WHERE status &lt;&gt; 'approved'</code> ou uma tabela de eventos já processados.</p></div>
+
+  <h3>Como a assinatura é calculada</h3>
+  <p>O cabeçalho <code>x-signature</code> tem o formato <code>ts=1700000000,v1=&lt;hex&gt;</code>. O manifesto assinado com HMAC-SHA256 e a chave secreta da aplicação é:</p>
+  <div class="code"><span class="lang">text</span><pre><code>id:&lt;data.id da query&gt;;request-id:&lt;x-request-id&gt;;ts:&lt;ts&gt;;</code></pre></div>
+  <ul>
+    <li>Partes ausentes (sem <code>data.id</code> ou sem <code>x-request-id</code>) são omitidas do manifesto.</li>
+    <li>O <code>data.id</code> é comparado como recebido e, se tiver letras maiúsculas, também em minúsculas. O SDK oficial usa o valor como recebido, enquanto a documentação pede minúsculas; aceitamos os dois.</li>
+    <li>O hash em hexadecimal é comparado sem diferenciar maiúsculas e em tempo constante (<code>hmac.Equal</code>).</li>
+    <li><code>Versions</code> permite aceitar versões futuras (<code>v2</code>…) por ordem de preferência.</li>
+    <li>Notificações de QR code presencial (Point) <strong>não são assinadas</strong> pelo MP.</li>
+  </ul>
+  <h3>Motivos de rejeição</h3>
+  <div class="table-wrap"><table>
+    <tr><th><code>SignatureFailure</code></th><th>Causa</th></tr>
+    <tr><td><code>SignatureMissingHeader</code></td><td>Sem <code>x-signature</code>.</td></tr>
+    <tr><td><code>SignatureMalformedHeader</code></td><td>Formato inválido ou <code>ts</code> não numérico.</td></tr>
+    <tr><td><code>SignatureMissingTS</code></td><td>Hash presente, sem <code>ts</code>.</td></tr>
+    <tr><td><code>SignatureMissingHash</code></td><td>Nenhuma das <code>Versions</code> aceitas está no cabeçalho.</td></tr>
+    <tr><td><code>SignatureMismatch</code></td><td>HMAC não confere (secret errado ou dados adulterados).</td></tr>
+    <tr><td><code>SignatureOutOfTolerance</code></td><td><code>ts</code> fora da janela de <code>Tolerance</code>.</td></tr>
+  </table></div>
+  <h3>Uso manual (frameworks como Gin, Echo, Fiber)</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">v := mp.WebhookValidator{Secret: secret, Tolerance: 10 * time.Minute}
+err := v.Validate(c.GetHeader("X-Signature"), c.GetHeader("X-Request-Id"), c.Query("data.id"))
+
+var se *mp.SignatureError
+if errors.As(err, &amp;se) {
+    slog.Warn("assinatura inválida", "reason", se.Reason, "request_id", se.RequestID)
+    c.Status(401) // não devolva o motivo no corpo
+    return
+}
+
+// Ou leia a notificação inteira (inclui IPN legado ?topic=payment&amp;id=123):
+n, err := mp.ParseWebhook(r, secret)
+id, err := n.PaymentID()</code></pre></div>
+</section>
+
+<section id="raw">
+  <h2>12. Chamadas cruas (<code>Do</code>)</h2>
+  <p class="lead">Para endpoints que a lib não cobre, <code>Do</code> reaproveita autenticação, cabeçalhos, retry, idempotência e erros tipados.</p>
+  <div class="code"><span class="lang">go</span><pre><code class="go">var tipos []struct {
+    ID   string `json:"id"`
+    Name string `json:"name"`
+}
+err := client.Do(ctx, http.MethodGet, "/v1/identification_types", nil, nil, &amp;tipos)
+// no sandbox: [CPF CNPJ]
+
+var merchantOrder map[string]any
+err = client.Do(ctx, http.MethodGet, "/merchant_orders/123", nil, nil, &amp;merchantOrder)
+
+// POST sempre leva X-Idempotency-Key (aleatória ou WithIdempotencyKey):
+err = client.Do(ctx, http.MethodPost, "/v1/algum-recurso", nil, body, &amp;out,
+    mp.WithIdempotencyKey("op-42"))</code></pre></div>
+  <p>Respostas vazias (204) não são decodificadas e não geram erro.</p>
+</section>
+
+<section id="receitas">
+  <h2>13. Receitas</h2>
+  <h3>Checkout completo, com tolerância a falhas</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">func (s *Service) Checkout(ctx context.Context, pedido Pedido) (*mp.Payment, error) {
+    // 1. Reaproveita um PIX pendente e ainda válido.
+    if pedido.PaymentID != 0 {
+        if p, err := s.mp.GetPayment(ctx, pedido.PaymentID); err == nil &amp;&amp;
+            p.Status == mp.StatusPending &amp;&amp; p.TimeToExpiration() &gt; 2*time.Minute {
+            return p, nil
+        }
+    }
+    // 2. Cria com chave determinística: repetir esta função não duplica a cobrança.
+    tentativa := pedido.Tentativas + 1
+    p, err := s.mp.CreatePix(ctx, mp.CreatePixRequest{
+        Amount:            pedido.Total,
+        Description:       "Pedido " + pedido.ID,
+        Payer:             mp.Payer{Email: pedido.Email},
+        ExternalReference: pedido.ID,
+        NotificationURL:   s.webhookURL,
+        ExpiresIn:         30 * time.Minute,
+        Metadata:          map[string]any{"tentativa": tentativa},
+    }, mp.WithIdempotencyKey(fmt.Sprintf("pix-%s-%d", pedido.ID, tentativa)))
+    if err != nil {
+        return nil, err
+    }
+    // 3. Persiste o vínculo antes de devolver o QR ao cliente.
+    return p, s.db.SalvarPagamento(ctx, pedido.ID, p.ID, tentativa)
+}</code></pre></div>
+
+  <h3>Reconciliação diária</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">ontem := time.Now().AddDate(0, 0, -1)
+inicio := time.Date(ontem.Year(), ontem.Month(), ontem.Day(), 0, 0, 0, 0, ontem.Location())
+for p, err := range client.AllPayments(ctx, mp.SearchParams{
+    Status: mp.StatusApproved, Range: "date_approved",
+    Begin: inicio, End: inicio.Add(24 * time.Hour), Limit: 100,
+}) {
+    if err != nil {
+        return err
+    }
+    if err := db.ConfirmarSeAusente(ctx, p.ExternalReference, p.ID, p.Amount); err != nil {
+        return err
+    }
+}</code></pre></div>
+
+  <h3>Testando o seu código sem rede</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    io.WriteString(w, `{"id":1,"status":"approved","transaction_amount":10}`)
+}))
+defer srv.Close()
+client, _ := mp.New("TEST-x", mp.WithBaseURL(srv.URL), mp.WithRetries(0, 0))</code></pre></div>
+</section>
+
+<section id="sandbox">
+  <h2>14. Sandbox e testes</h2>
+  <div class="code"><span class="lang">sh</span><pre><code class="sh">make test               # unitários (httptest, sem rede, com -race)
+make test-integration   # sandbox real, token TEST- do .env.test
+make report             # reports/unit.md (com cobertura) e reports/integration.md
+
+MP_ENV_FILE=.env.staging make test-integration    # outro arquivo de credenciais
+MP_PAYER_EMAIL=outro@gmail.com make test-integration</code></pre></div>
+  <p>O gerador <code>cmd/testreport</code> roda <code>go test -json</code>, mascara tokens <code>TEST-</code>/<code>APP_USR-</code> e escreve um resumo, os resultados, os logs de cada teste e a cobertura por função.</p>
+  <h3>Comportamento real observado</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Situação</th><th>Resultado no sandbox</th></tr>
+    <tr><td>Pagador <code>@testuser.com</code> com token TEST de conta real</td><td class="no">403, causa 4390</td></tr>
+    <tr><td>Pagador com e-mail comum</td><td class="ok">aceito</td></tr>
+    <tr><td>Mesma chave de idempotência duas vezes</td><td class="ok">mesmo ID de pagamento</td></tr>
+    <tr><td><code>ticket_url</code> / <code>live_mode</code></td><td><code>.../sandbox/payments/...</code> / false</td></tr>
+    <tr><td>Tipo de documento inválido (<code>XYZ</code>)</td><td>aceito (não validado)</td></tr>
+    <tr><td>Expiração de 90 dias</td><td>aceita</td></tr>
+    <tr><td><code>notification_url</code> com localhost</td><td class="no">400, causa 4020</td></tr>
+    <tr><td>Busca por <code>external_reference</code> (1 pagamento)</td><td class="ok">encontrado na hora</td></tr>
+    <tr><td>Busca por método, data ou sem filtro</td><td class="no">0 resultados</td></tr>
+    <tr><td>Atualizar metadata / referência / expiração</td><td class="no">403 / 401 / 400</td></tr>
+    <tr><td>Estornar ou listar estornos de PIX pendente</td><td class="no">400 / 403</td></tr>
+    <tr><td>Erros incluem <code>X-Request-Id</code></td><td class="ok">sim</td></tr>
+  </table></div>
+</section>
+
+<section id="sdk">
+  <h2>15. Comparação com o SDK oficial (sdk-python)</h2>
+  <p class="lead">O <a href="https://github.com/mercadopago/sdk-python">sdk-python</a> foi estudado por engenharia reversa (v3.6.0). Trouxemos o que ele faz bem e corrigimos o que ele deixa a desejar.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Aspecto</th><th>sdk-python</th><th>mercadopagopix</th></tr>
+    <tr><td>Retry</td><td>urllib3 <code>Retry</code> em 429/500/502/503/504, 3 tentativas</td><td>Mesmo padrão, mais <code>Retry-After</code>, jitter, teto <code>MaxDelay</code> e hook <code>OnRetry</code></td></tr>
+    <tr><td>Idempotência</td><td>UUID novo em <em>todo</em> request, inclusive GET</td><td>Só onde importa (POST), reutilizada em todas as tentativas, com chave determinística opcional</td></tr>
+    <tr><td>Opções por chamada</td><td><code>RequestOptions</code> (token, headers, timeout)</td><td><code>CallOption</code>: token, chave de idempotência, headers</td></tr>
+    <tr><td>Cabeçalhos de integração</td><td><code>x-integrator-id</code>, <code>x-platform-id</code>, <code>x-corporation-id</code></td><td>Os mesmos: <code>WithIntegratorID</code>, <code>WithPlatformID</code>, <code>WithCorporationID</code></td></tr>
+    <tr><td>Respostas</td><td>dict <code>{"status", "response"}</code>; o chamador verifica o status</td><td>Tipos Go e <code>error</code> idiomático com <code>errors.Is</code>/<code>As</code></td></tr>
+    <tr><td>Paginação</td><td><code>search_auto_paging_iter</code> (gerador)</td><td><code>AllPayments</code> com <code>iter.Seq2</code> e parada antecipada</td></tr>
+    <tr><td>Webhook</td><td><code>WebhookSignatureValidator</code> com motivos tipados</td><td>Mesmos motivos, mais tolerância a maiúsculas no <code>data.id</code>/hash, handler HTTP pronto e modo assíncrono</td></tr>
+    <tr><td>Dinheiro</td><td><code>float</code></td><td><code>Amount</code> em centavos</td></tr>
+    <tr><td>Contexto/cancelamento</td><td>não há</td><td><code>context.Context</code> em tudo, inclusive nas esperas de retry</td></tr>
+    <tr><td>Rastreamento de erro</td><td>—</td><td><code>APIError.RequestID</code> e dicas por causa</td></tr>
+    <tr><td>Escopo</td><td>Todos os produtos (orders, cartões, assinaturas…)</td><td>Focado em PIX; o resto via <code>Do</code></td></tr>
+    <tr><td>Dependências</td><td>requests, urllib3</td><td>nenhuma</td></tr>
+  </table></div>
+  <div class="callout"><strong>O que não copiamos</strong><p>O SDK envia <code>x-product-id</code> e <code>x-tracking-id</code> com identificadores próprios do SDK oficial. Não reproduzimos esses valores para não nos passarmos por ele; use <code>WithUserAgent</code> e <code>WithPlatformID</code> para se identificar.</p></div>
+</section>
+
+<section id="referencia">
+  <h2>16. Referência rápida</h2>
+  <h3>Construtores e utilitários</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">func New(accessToken string, opts ...Option) (*Client, error)
+func NewFromEnv(opts ...Option) (*Client, error)
+func LoadEnvFile(path string) error
+func ReadEnvFile(path string) (map[string]string, error)
+func DefaultRetryPolicy() RetryPolicy
+func Reais(v float64) Amount
+func Cents(c int64) Amount
+func VerifySignature(secret, xSignature, xRequestID, dataID string, tolerance time.Duration) error
+func ParseWebhook(r *http.Request, secret string) (*Notification, error)</code></pre></div>
+  <h3>Métodos do Client</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">CreatePix(ctx, req CreatePixRequest, opts ...CallOption) (*Payment, error)
+GetPayment(ctx, id int64, opts ...CallOption) (*Payment, error)
+WaitForPayment(ctx, id int64, interval time.Duration, opts ...CallOption) (*Payment, error)
+CancelPayment(ctx, id int64, opts ...CallOption) (*Payment, error)
+UpdatePayment(ctx, id int64, fields map[string]any, opts ...CallOption) (*Payment, error)
+Refund(ctx, id int64, amount Amount, opts ...CallOption) (*Refund, error)
+ListRefunds(ctx, paymentID int64, opts ...CallOption) ([]Refund, error)
+GetRefund(ctx, paymentID, refundID int64, opts ...CallOption) (*Refund, error)
+SearchPayments(ctx, params SearchParams, opts ...CallOption) (*SearchResult, error)
+AllPayments(ctx, params SearchParams, opts ...CallOption) iter.Seq2[*Payment, error]
+SearchByExternalReference(ctx, ref string, opts ...CallOption) ([]Payment, error)
+Me(ctx, opts ...CallOption) (*Account, error)
+Do(ctx, method, path string, query url.Values, body, out any, opts ...CallOption) error
+NewWebhookHandler(cfg WebhookConfig) http.Handler
+WebhookHandler(secret string, fn func(ctx, *Payment) error) http.Handler
+TestMode() bool</code></pre></div>
+  <h3>Métodos de Payment</h3>
+  <div class="code"><span class="lang">go</span><pre><code class="go">IsPaid() bool
+IsExpired() bool
+TimeToExpiration() time.Duration
+QRCodePNG() ([]byte, error)
+String() string // resumo legível, sem a imagem base64</code></pre></div>
+</section>
+
+<footer>
+  mercadopagopix · manual gerado junto com a v1.1 da lib · testado contra o sandbox do Mercado Pago em 23/10/2026.
+</footer>
+</main>
+</div>
+
+<script>
+(function () {
+  // Theme toggle, remembered per browser.
+  var root = document.documentElement;
+  try { var saved = localStorage.getItem("mpx-theme"); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") === "dark" ||
+      (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("mpx-theme", next); } catch (e) {}
+  });
+
+  // Mobile menu.
+  var toc = document.getElementById("toc");
+  document.getElementById("menuBtn").addEventListener("click", function () { toc.classList.toggle("open"); });
+  toc.addEventListener("click", function (e) { if (e.target.tagName === "A") toc.classList.remove("open"); });
+
+  // Minimal Go highlighting: comments, strings, keywords, numbers, calls.
+  var KW = /\b(func|return|if|else|for|range|switch|case|default|var|const|type|struct|interface|map|package|import|go|defer|break|continue|nil|true|false|select|chan)\b/g;
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function highlight(code) {
+    var out = "", re = /(\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*"|`[^`]*`)/g, last = 0, m;
+    var src = code.textContent;
+    function plain(s) {
+      return esc(s)
+        .replace(KW, '<span class="tok-kw">$1</span>')
+        .replace(/\b(\d[\d_]*(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>')
+        .replace(/\b([A-Z][A-Za-z0-9]*|[a-z][A-Za-z0-9]*)(?=\()/g, '<span class="tok-fn">$1</span>');
+    }
+    while ((m = re.exec(src))) {
+      out += plain(src.slice(last, m.index));
+      out += m[1] ? '<span class="tok-com">' + esc(m[1]) + "</span>" : '<span class="tok-str">' + esc(m[2]) + "</span>";
+      last = re.lastIndex;
+    }
+    code.innerHTML = out + plain(src.slice(last));
+  }
+  document.querySelectorAll("code.go").forEach(highlight);
+
+  // Copy buttons.
+  document.querySelectorAll(".code").forEach(function (box) {
+    var btn = document.createElement("button");
+    btn.className = "ghost copy"; btn.textContent = "Copiar";
+    btn.addEventListener("click", function () {
+      var text = box.querySelector("code").textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+        .then(function () { btn.textContent = "Copiado"; setTimeout(function () { btn.textContent = "Copiar"; }, 1200); })
+        .catch(function () { btn.textContent = "Falhou"; });
+    });
+    box.appendChild(btn);
+  });
+
+  // Highlight the current section in the table of contents.
+  var links = {};
+  toc.querySelectorAll("a[href^='#']").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting && links[en.target.id]) {
+        Object.values(links).forEach(function (a) { a.classList.remove("active"); });
+        links[en.target.id].classList.add("active");
+      }
+    });
+  }, { rootMargin: "-10% 0px -80% 0px" });
+  document.querySelectorAll("main section[id]").forEach(function (s) { obs.observe(s); });
+})();
+</script>
+</body>
+</html>
